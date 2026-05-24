@@ -28,9 +28,12 @@ LIST_KEYWORDS = {
     "قائمة المميزين": Ranks.RANK_VIP,
 }
 
+import re as _re
+_LIST_RE = r"^(?:" + "|".join(sorted(map(_re.escape, LIST_KEYWORDS.keys()), key=len, reverse=True)) + r")$"
+
 
 # ============ قائمة رتبة معيّنة ============
-@Client.on_message(filters.text & ~filters.bot)
+@Client.on_message(filters.regex(_LIST_RE) & ~filters.bot)
 async def list_rank(client: Client, message: Message):
     text = (message.text or "").strip()
 

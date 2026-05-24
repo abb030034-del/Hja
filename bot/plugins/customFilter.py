@@ -36,7 +36,8 @@ def is_member_enabled(rds, chat_id) -> bool:
 # ============================================================
 
 # اضف رد <كلمة>  (مع الرد على رسالة المحتوى)
-@Client.on_message(filters.group & filters.regex(r"^اضف\s+رد\s+([\s\S]+)$"))
+# negative lookahead لتجنّب التضارب مع "اضف رد عام/مميز/متعدد عام"
+@Client.on_message(filters.group & filters.regex(r"^اضف\s+رد\s+(?!عام\s|مميز\s|متعدد\s+عام\s)([\s\S]+)$"))
 async def add_group_filter(client: Client, message: Message):
     rds = client.redis
     user_id = message.from_user.id if message.from_user else None
@@ -63,7 +64,7 @@ async def add_group_filter(client: Client, message: Message):
 
 
 # مسح رد <كلمة>
-@Client.on_message(filters.group & filters.regex(r"^مسح\s+رد\s+([\s\S]+)$"))
+@Client.on_message(filters.group & filters.regex(r"^مسح\s+رد\s+(?!عام\s|مميز\s|متعدد\s+عام\s)([\s\S]+)$"))
 async def del_group_filter(client: Client, message: Message):
     rds = client.redis
     user_id = message.from_user.id if message.from_user else None
@@ -269,9 +270,10 @@ async def list_special_filters(client: Client, message: Message):
 
 
 # ============================================================
-# 4) محرّك الردود : يتحقق من أي رسالة ويردّ إن كانت مطابقة
+# 4) محرّك الردود  (شخصي > مميز > مجموعة)
+# في group=4 لكي لا يحجب أي handler آخر في group=0
 # ============================================================
-@Client.on_message(filters.group & filters.text & ~filters.via_bot)
+@Client.on_message(filters.group & filters.text & ~filters.via_bot, group=4)
 async def filter_engine(client: Client, message: Message):
     if not message.from_user or not message.text:
         return

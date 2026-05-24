@@ -23,9 +23,12 @@ CLEAR_RANK_KEYWORDS = {
     "مسح المميزين": Ranks.RANK_VIP,
 }
 
+import re as _re
+_CLEAR_RE = r"^(?:" + "|".join(sorted(map(_re.escape, CLEAR_RANK_KEYWORDS.keys()), key=len, reverse=True)) + r")$"
+
 
 # ============ مسح رتبة معيّنة ============
-@Client.on_message(filters.text & ~filters.bot)
+@Client.on_message(filters.regex(_CLEAR_RE) & ~filters.bot)
 async def clear_specific_rank(client: Client, message: Message):
     text = (message.text or "").strip()
     rank = None

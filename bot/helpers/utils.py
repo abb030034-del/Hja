@@ -4,6 +4,7 @@ helpers/utils.py
 أدوات مساعدة مشتركة.
 """
 
+import html
 from pyrogram.types import Message
 
 
@@ -46,6 +47,6 @@ async def extract_user(client, message: Message):
 
 
 def mention(user) -> str:
-    """منشن HTML للمستخدم"""
-    name = user.first_name or "مستخدم"
+    """منشن HTML للمستخدم (مع escape للحماية من XSS/كسر التنسيق)"""
+    name = html.escape(user.first_name or "مستخدم")
     return f'<a href="tg://user?id={user.id}">{name}</a>'

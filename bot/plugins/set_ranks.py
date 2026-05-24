@@ -4,6 +4,8 @@ plugins/set_ranks.py
 رفع وتنزيل الرتب + تفعيل/تعطيل الرفع + تنزيل الكل.
 """
 
+import re
+
 from pyrogram import Client, filters
 from pyrogram.enums import ParseMode
 from pyrogram.types import Message
@@ -54,8 +56,13 @@ def _match_keyword(text: str, mapping: dict):
     return None
 
 
+# بناء regex صارم للأوامر المعروفة فقط (يمنع التضارب مع fun.py وغيره)
+_RAISE_RE = r"^(?:" + "|".join(sorted(map(re.escape, RAISE_KEYWORDS.keys()), key=len, reverse=True)) + r")(?:\s|$)"
+_DEMOTE_RE = r"^(?:" + "|".join(sorted(map(re.escape, DEMOTE_KEYWORDS.keys()), key=len, reverse=True)) + r")(?:\s|$)"
+
+
 # ============ رفع رتبة ============
-@Client.on_message(filters.text & ~filters.bot)
+@Client.on_message(filters.regex(_RAISE_RE) & ~filters.bot)
 async def handle_raise(client: Client, message: Message):
     rank = _match_keyword(message.text, RAISE_KEYWORDS)
     if not rank:
@@ -108,7 +115,7 @@ async def handle_raise(client: Client, message: Message):
 
 
 # ============ تنزيل رتبة ============
-@Client.on_message(filters.text & ~filters.bot)
+@Client.on_message(filters.regex(_DEMOTE_RE) & ~filters.bot)
 async def handle_demote(client: Client, message: Message):
     rank = _match_keyword(message.text, DEMOTE_KEYWORDS)
     if not rank:

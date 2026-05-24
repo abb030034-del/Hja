@@ -197,9 +197,9 @@ async def toggle_dev_filters(client: Client, message: Message):
 
 
 # ============================================================
-# 8) محرّك الردود العامة
+# 8) محرّك الردود العامة (في group=5 لكي لا يحجب أي handler آخر)
 # ============================================================
-@Client.on_message(filters.text & ~filters.via_bot)
+@Client.on_message(filters.text & ~filters.via_bot, group=5)
 async def global_filter_engine(client: Client, message: Message):
     if not message.text or not message.from_user:
         return

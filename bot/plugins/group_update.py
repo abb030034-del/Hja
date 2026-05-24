@@ -102,11 +102,9 @@ async def disable_bot(client: Client, message: Message):
 # =============================================================
 # 3) اطلع / {اسم البوت} اطلع  -> البوت يغادر المجموعة
 # =============================================================
-@Client.on_message(filters.group & filters.text)
+@Client.on_message(filters.group & filters.regex(r"^(اطلع|البوت\s+اطلع|@?\w+\s+اطلع)$"))
 async def leave_command(client: Client, message: Message):
     text = (message.text or "").strip()
-    if not text.endswith("اطلع"):
-        return
 
     # صيغ مقبولة: "اطلع" / "البوت اطلع" / "{username} اطلع"
     valid = False
@@ -202,7 +200,11 @@ AUTO_REPLIES = {
 }
 
 
-@Client.on_message(filters.text & filters.group)
+# regex صارم لاسماء الردود التلقائية فقط
+_AUTO_REPLIES_RE = r"^(?:" + "|".join(AUTO_REPLIES.keys()) + r")$"
+
+
+@Client.on_message(filters.group & filters.regex(_AUTO_REPLIES_RE))
 async def auto_replies(client: Client, message: Message):
     text = (message.text or "").strip()
     if text in AUTO_REPLIES:

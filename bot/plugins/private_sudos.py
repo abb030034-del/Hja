@@ -56,11 +56,8 @@ async def track_users_chats(client, message: Message):
 # =================== /start (في الخاص) ===================
 @Client.on_message(filters.private & filters.command("start"))
 async def private_start(client, message: Message):
-    # لا تتداخل مع رابط صارحني
-    parts = (message.text or "").split(maxsplit=1)
-    if len(parts) > 1 and parts[1].startswith("sarhni_"):
-        return
-
+    # ملاحظة : sarhni.py يلتقط رابط /start sarhni_xxx بأولوية group=-1
+    # وهنا نتعامل مع /start العادي.
     rds = client.redis
     uid = message.from_user.id if message.from_user else 0
     is_dev = Ranks.is_dev(uid)

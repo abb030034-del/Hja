@@ -77,39 +77,40 @@ async def make_sarhni_link(client, message: Message):
 
 
 # /start sarhni_<token>
-@Client.on_message(filters.private & filters.command("start"))
+# group=-1 لكي يفحص قبل private_sudos، ويوقف الانتشار فقط لو كان رابط صارحني
+@Client.on_message(filters.private & filters.command("start"), group=-1)
 async def sarhni_start(client, message: Message):
     rds = client.redis
     parts = (message.text or "").split(maxsplit=1)
     if len(parts) < 2 or not parts[1].startswith("sarhni_"):
-        return  # خلي /start الافتراضي يشتغل في مكان آخر
+        return  # خلّ private_sudos يعمل /start العادي
 
     token = parts[1][len("sarhni_"):]
     target_id = rds.get(_token_key(token))
     if not target_id:
         await message.reply_text("⚠️ هذا الرابط غير صالح أو منتهي.")
+        await message.stop_propagation()
         return
 
-    rds.set(_pending_key(message.from_user.id), target_id, ex=600)  # 10 دقائق لإرسال الرسالة
+    rds.set(_pending_key(message.from_user.id), target_id, ex=600)
     await message.reply_text(
         "💬 أرسل الآن رسالتك (نص أو صورة...) وسيتم تحويلها مجهولة الهوية للشخص.",
     )
+    await message.stop_propagation()
 
 
-# استلام الرسالة المجهولة في الخاص
-@Client.on_message(filters.private & ~filters.command("start"))
+# استلام الرسالة المجهولة في الخاص — group=-1 ويوقف الانتشار فقط لو هناك pending
+@Client.on_message(filters.private & ~filters.command("start"), group=-1)
 async def receive_sarhni(client, message: Message):
     rds = client.redis
     uid = message.from_user.id
     target = rds.get(_pending_key(uid))
     if not target:
-        return  # ليست رسالة صارحني
+        return  # ليست رسالة صارحني — مرّر للـhandlers الأخرى
 
     rds.delete(_pending_key(uid))
     try:
-        # ابعث الرسالة بدون الكشف عن المرسل
         await message.copy(int(target), caption=None)
-        # رسالة عنوان
         await client.send_message(
             int(target),
             "💌 لقد وصلتك رسالة مجهولة عبر <b>صارحني</b>",
@@ -118,3 +119,4 @@ async def receive_sarhni(client, message: Message):
         await message.reply_text("✅ تم إرسال رسالتك مجهولة الهوية.")
     except Exception as e:
         await message.reply_text(f"⚠️ فشل الإرسال : {e}")
+    await message.stop_propagation()
