@@ -141,46 +141,14 @@ async def leave_command(client: Client, message: Message):
 
 
 # =============================================================
-# 4) ترحيب وتوديع الأعضاء
+# 4) توديع الأعضاء
+#    (الترحيب أصبح في plugins/welcome_and_rules.py)
 # =============================================================
-WELCOME_MESSAGES = [
-    "🌹 أهلاً وسهلاً بك {user} في {chat}",
-    "👋 يا هلا والله بـ {user} ، نوّرت {chat}",
-    "✨ منوّرنا يا {user} في {chat}",
-]
-
 GOODBYE_MESSAGES = [
     "💔 وداعاً {user} ..",
     "👋 {user} غادر المجموعة.",
     "🚪 {user} ترك {chat}.",
 ]
-
-
-@Client.on_message(filters.new_chat_members)
-async def on_new_members(client: Client, message: Message):
-    rds = client.redis
-    if not is_bot_enabled(rds, message.chat.id):
-        return
-
-    me = await client.get_me()
-    chat_title = message.chat.title or "المجموعة"
-
-    for member in message.new_chat_members:
-        if member.id == me.id:
-            await message.reply_text(
-                "🎉 شكراً لإضافتي إلى المجموعة!\n"
-                "اكتب <b>تفعيل البوت</b> للبدء.",
-                parse_mode=ParseMode.HTML,
-            )
-            continue
-        if member.is_bot:
-            continue
-
-        text = random.choice(WELCOME_MESSAGES).format(
-            user=mention(member),
-            chat=chat_title,
-        )
-        await message.reply_text(text, parse_mode=ParseMode.HTML)
 
 
 @Client.on_message(filters.left_chat_member)
