@@ -850,3 +850,250 @@ async def reset_top(client: Client, message: Message):
         for key in rds.scan_iter(pat):
             rds.delete(key); deleted += 1
     await message.reply_text(f"🗑 تم تصفير التوب ({deleted} مفتاح).")
+
+
+
+# =============================================================
+# ==================  الألعاب النصية (المرحلة 11)  ============
+# =============================================================
+from helpers import games_data as GD
+
+
+def _active_key(chat_id): return f"game:active:{chat_id}"
+def _score_key(chat_id):  return f"game:score:{chat_id}"
+
+GAME_POINTS = {
+    "capitals": 3, "scramble": 2, "complete": 2, "english": 2,
+    "arabic": 2, "meaning": 4, "math": 2, "emoji": 2, "sentence": 4,
+    "dismantle": 3,
+}
+GAME_TIMEOUT = 60  # ثانية
+
+
+def _start_game(rds, chat_id, gtype, answer, hint=""):
+    rds.hset(_active_key(chat_id), mapping={
+        "type": gtype, "answer": str(answer),
+        "hint": str(hint), "start_at": int(time.time()),
+    })
+    rds.expire(_active_key(chat_id), GAME_TIMEOUT * 2)
+
+
+def _get_active(rds, chat_id):
+    d = rds.hgetall(_active_key(chat_id))
+    if not d: return None
+    if int(time.time()) - int(d.get("start_at", 0)) > GAME_TIMEOUT:
+        rds.delete(_active_key(chat_id))
+        return None
+    return d
+
+
+def _add_score(rds, chat_id, uid, pts):
+    rds.hincrby(_score_key(chat_id), str(uid), pts)
+
+
+# كلمات
+@Client.on_message(filters.group & filters.regex(r"^كلمات$"))
+async def game_scramble(client, message):
+    rds = client.redis
+    if _get_active(rds, message.chat.id):
+        await message.reply_text("⚠️ توجد لعبة نشطة.")
+        return
+    word = random.choice(GD.SCRAMBLE_WORDS)
+    letters = list(word); random.shuffle(letters)
+    _start_game(rds, message.chat.id, "scramble", word)
+    await message.reply_text(
+        f"🔤 <b>كلمات</b> — أعد ترتيب الحروف:\n\n<code>{' '.join(letters)}</code>\n\nلديك {GAME_TIMEOUT}ث.",
+        parse_mode=ParseMode.HTML,
+    )
+
+
+# عواصم
+@Client.on_message(filters.group & filters.regex(r"^عواصم$"))
+async def game_capitals(client, message):
+    rds = client.redis
+    if _get_active(rds, message.chat.id):
+        await message.reply_text("⚠️ توجد لعبة نشطة."); return
+    country, capital = random.choice(list(GD.CAPITALS.items()))
+    _start_game(rds, message.chat.id, "capitals", capital)
+    await message.reply_text(f"🏛 <b>عواصم</b> — ما عاصمة <b>{country}</b> ؟", parse_mode=ParseMode.HTML)
+
+
+# اكمل
+@Client.on_message(filters.group & filters.regex(r"^اكمل$"))
+async def game_complete(client, message):
+    rds = client.redis
+    if _get_active(rds, message.chat.id):
+        await message.reply_text("⚠️ توجد لعبة نشطة."); return
+    word = random.choice(GD.SCRAMBLE_WORDS)
+    idx = random.randint(1, len(word)-1)
+    hidden = word[:idx] + "_" + word[idx+1:]
+    _start_game(rds, message.chat.id, "complete", word)
+    await message.reply_text(f"✏️ <b>اكمل</b> — أكمل الكلمة:\n\n<code>{hidden}</code>", parse_mode=ParseMode.HTML)
+
+
+# انقليزي
+@Client.on_message(filters.group & filters.regex(r"^انقليزي$"))
+async def game_english(client, message):
+    rds = client.redis
+    if _get_active(rds, message.chat.id):
+        await message.reply_text("⚠️ توجد لعبة نشطة."); return
+    en, ar = random.choice(list(GD.EN_TO_AR.items()))
+    _start_game(rds, message.chat.id, "english", ar)
+    await message.reply_text(f"🌍 <b>انقليزي</b> — ما معنى <b>{en}</b> بالعربي ؟", parse_mode=ParseMode.HTML)
+
+
+# عربي
+@Client.on_message(filters.group & filters.regex(r"^عربي$"))
+async def game_arabic(client, message):
+    rds = client.redis
+    if _get_active(rds, message.chat.id):
+        await message.reply_text("⚠️ توجد لعبة نشطة."); return
+    en, ar = random.choice(list(GD.EN_TO_AR.items()))
+    _start_game(rds, message.chat.id, "arabic", en)
+    await message.reply_text(f"🌍 <b>عربي</b> — ما ترجمة <b>{ar}</b> للإنجليزية ؟", parse_mode=ParseMode.HTML)
+
+
+# معاني
+@Client.on_message(filters.group & filters.regex(r"^معاني$"))
+async def game_meaning(client, message):
+    rds = client.redis
+    if _get_active(rds, message.chat.id):
+        await message.reply_text("⚠️ توجد لعبة نشطة."); return
+    word = random.choice(list(GD.MEANINGS.keys()))
+    meaning = GD.MEANINGS[word]
+    _start_game(rds, message.chat.id, "meaning", word, hint=meaning)
+    await message.reply_text(f"📖 <b>معاني</b> — ما الكلمة التي معناها:\n\n<i>{meaning}</i>", parse_mode=ParseMode.HTML)
+
+
+# احسب
+@Client.on_message(filters.group & filters.regex(r"^احسب$"))
+async def game_math(client, message):
+    rds = client.redis
+    if _get_active(rds, message.chat.id):
+        await message.reply_text("⚠️ توجد لعبة نشطة."); return
+    a, b = random.randint(2, 50), random.randint(2, 50)
+    op = random.choice(["+", "-", "×"])
+    answer = {"+": a+b, "-": a-b, "×": a*b}[op]
+    _start_game(rds, message.chat.id, "math", answer)
+    await message.reply_text(f"🧮 <b>احسب</b> — كم يساوي <b>{a} {op} {b}</b> ؟", parse_mode=ParseMode.HTML)
+
+
+# ايموجي
+@Client.on_message(filters.group & filters.regex(r"^ايموجي$"))
+async def game_emoji(client, message):
+    rds = client.redis
+    if _get_active(rds, message.chat.id):
+        await message.reply_text("⚠️ توجد لعبة نشطة."); return
+    emoji, ans = random.choice(list(GD.EMOJI_QUIZ.items()))
+    _start_game(rds, message.chat.id, "emoji", ans)
+    await message.reply_text(f"🎯 <b>ايموجي</b> — ماذا يعني هذا : {emoji}", parse_mode=ParseMode.HTML)
+
+
+# جمل
+@Client.on_message(filters.group & filters.regex(r"^جمل$"))
+async def game_sentence(client, message):
+    rds = client.redis
+    if _get_active(rds, message.chat.id):
+        await message.reply_text("⚠️ توجد لعبة نشطة."); return
+    s = random.choice(GD.SENTENCES)
+    words = s.split(); random.shuffle(words)
+    _start_game(rds, message.chat.id, "sentence", s)
+    await message.reply_text(
+        f"📝 <b>جمل</b> — أعد ترتيب الجملة:\n\n<code>{' | '.join(words)}</code>",
+        parse_mode=ParseMode.HTML,
+    )
+
+
+# تفكيك
+@Client.on_message(filters.group & filters.regex(r"^تفكيك$"))
+async def game_dismantle(client, message):
+    rds = client.redis
+    if _get_active(rds, message.chat.id):
+        await message.reply_text("⚠️ توجد لعبة نشطة."); return
+    word = random.choice(GD.SCRAMBLE_WORDS)
+    hidden = word[0] + "_" * (len(word) - 1)
+    _start_game(rds, message.chat.id, "dismantle", word, hint=hidden)
+    await message.reply_text(
+        f"🧩 <b>تفكيك</b> — خمّن الكلمة:\n\n<code>{hidden}</code>\n(عدد الحروف: {len(word)})",
+        parse_mode=ParseMode.HTML,
+    )
+
+
+# كت / تويت (نرد)
+@Client.on_message(filters.group & filters.regex(r"^(كت|تويت)$"))
+async def game_dice(client, message):
+    name = message.matches[0].group(1)
+    msg = await client.send_dice(message.chat.id, emoji="🎲")
+    val = msg.dice.value if msg.dice else "?"
+    await message.reply_text(f"🎲 <b>{name}</b> — النتيجة : <b>{val}</b>", parse_mode=ParseMode.HTML)
+
+
+# الغاء اللعبه
+@Client.on_message(filters.group & filters.regex(r"^الغاء\s+اللعبه$"))
+async def cancel_game(client, message):
+    rds = client.redis
+    user_id = message.from_user.id if message.from_user else None
+    if not user_id: return
+    if not _get_active(rds, message.chat.id):
+        await message.reply_text("ℹ️ لا توجد لعبة نشطة."); return
+    if not Ranks.admin_pls(rds, user_id, message.chat.id):
+        await message.reply_text("⛔ هذا الأمر للأدمن أو أعلى."); return
+    rds.delete(_active_key(message.chat.id))
+    await message.reply_text("🛑 تم إلغاء اللعبة.")
+
+
+# ترتيب (لوحة الصدارة)
+@Client.on_message(filters.group & filters.regex(r"^ترتيب$"))
+async def game_leaderboard(client, message):
+    rds = client.redis
+    scores = rds.hgetall(_score_key(message.chat.id)) or {}
+    if not scores:
+        await message.reply_text("📭 لا توجد نقاط بعد."); return
+    pairs = sorted(((int(u), int(p)) for u, p in scores.items()), key=lambda x: x[1], reverse=True)[:10]
+    lines = ["🏆 <b>ترتيب اللاعبين:</b>\n"]
+    medals = ["🥇", "🥈", "🥉"]
+    for i, (uid, p) in enumerate(pairs):
+        rank = medals[i] if i < 3 else f"<b>{i+1}.</b>"
+        try:
+            u = await client.get_users(uid); name = mention(u)
+        except Exception:
+            name = f"<code>{uid}</code>"
+        lines.append(f"{rank} {name} — <b>{p}</b> نقطة")
+    await message.reply_text("\n".join(lines), parse_mode=ParseMode.HTML)
+
+
+# محرّك التحقق من الإجابات
+@Client.on_message(filters.group & filters.text & ~filters.via_bot, group=2)
+async def game_answer_engine(client, message):
+    if not message.from_user or not message.text: return
+    rds = client.redis
+    chat_id = message.chat.id
+
+    active = _get_active(rds, chat_id)
+    if not active: return
+
+    answer = (active.get("answer", "") or "").strip().lower()
+    user_text = message.text.strip().lower()
+    if user_text == answer:
+        gtype = active.get("type", "")
+        pts = GAME_POINTS.get(gtype, 1)
+        _add_score(rds, chat_id, message.from_user.id, pts)
+        rds.delete(_active_key(chat_id))
+        await message.reply_text(
+            f"✅ إجابة صحيحة! +{pts} نقاط لـ {mention(message.from_user)}",
+            parse_mode=ParseMode.HTML,
+        )
+
+
+# سورس / استخراج الاكواد
+@Client.on_message(filters.regex(r"^(سورس|استخراج\s+الاكواد)$"))
+async def source_info(client, message):
+    text = (
+        "📦 <b>السورس</b>\n"
+        "━━━━━━━━━━━━\n"
+        "• اللغة : Python\n"
+        "• المكتبة : Pyrogram + Redis\n"
+        f"• المطور : <a href=\"tg://user?id={config.Dev_Zaid}\">Dev</a>\n"
+        "━━━━━━━━━━━━"
+    )
+    await message.reply_text(text, parse_mode=ParseMode.HTML, disable_web_page_preview=True)
